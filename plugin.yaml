@@ -94,6 +94,16 @@ node_types:
                 # and the `client.rb` includes `validation_key` pointing to
                 # that file.
 
+                # Alternative 3: Chef Client in local mode (Chef Zero)
+                #
+                # - chef_repo (required)
+                #
+                # The `chef_repo` property should point to a `tar.gz` file
+                # that contains complete chef repository. This property can be
+                # URL (in which case file will be downloaded and extracted) or
+                # relative path (in which case archive should be uploaded with
+                # blueprint).
+
                 # Common for Solo and Client - start
                 #
                 # Either `runlist` or `runlists` property must be specified.

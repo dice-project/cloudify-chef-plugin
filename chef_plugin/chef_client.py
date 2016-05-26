@@ -35,6 +35,8 @@ import tempfile
 import time
 import subprocess
 import json
+import tarfile
+import shutil
 
 import requests
 
@@ -401,6 +403,28 @@ class ChefManager(object):
 
         self._sudo("mv", temp_file.name, filename)
 
+    def _obtain_resource(self, resource):
+        ctx = self.ctx
+        is_res, path = is_resource_url(resource)
+        if is_res:
+            ctx.logger.info('Getting resource {0}'.format(path))
+            return ctx.download_resource(path)
+        ctx.logger.info('Downloading resource from {0}'.format(resource))
+        tmp = tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False)
+        tmp.write(requests.get(resource, stream=True).raw.read())
+        tmp.flush()
+        tmp.close()
+        return tmp.name
+
+    def _extract_resource(self, resource):
+        ctx = self.ctx
+        folder = tempfile.mkdtemp()
+        ctx.logger.info('Extracting {} to {}'.format(resource, folder))
+        tar = tarfile.open(resource)
+        tar.extractall(folder)
+        tar.close()
+        return folder
+
 
 class ChefClientManager(ChefManager):
 
@@ -608,8 +632,51 @@ class ChefSoloManager(ChefManager):
                 **properties['chef_config']))
 
 
+class ChefZeroManager(ChefManager):
+
+    """ Installs Chef zore """
+
+    NAME = 'zero'
+    REQUIRED_ARGS = {'chef_repo'}
+    DIRS = {
+        'cache_path': 'cache'
+    }
+    DIRS.update(COMMON_DIRS)
+
+    def _get_cmd(self, runlist):
+        return [
+            self._get_binary(), '-z', '-c', self.get_path('etc', 'zero.rb'),
+            '-o', runlist, '-j', self.attribute_file.name, '--force-formatter'
+        ]
+
+    def _get_binary(self):
+        return 'chef-client'
+
+    def install_files(self):
+        super(ChefZeroManager, self).install_files()
+        self._sudo_write_file(
+            self.get_path('etc', 'zero.rb'),
+            self.get_chef_common_config() +
+            'log_location           "{chef_data_root}/log/zero.log"\n'
+            'pid_file               "{chef_data_root}/zero.pid"\n'
+            'Chef::Log::Formatter.show_time = true\n'.format(
+                chef_data_root=self.get_chef_data_root()))
+
+    def _prepare_for_run(self, runlist):
+        chef_config = self.get_node_properties(self.ctx)['chef_config']
+        repo = self._obtain_resource(chef_config['chef_repo'])
+        tmp_folder = self._extract_resource(repo)
+        toplevel = os.listdir(tmp_folder)[0]
+        for item in ['cookbooks', 'roles', 'data_bags', 'environments']:
+            path = os.path.join(tmp_folder, toplevel, item)
+            if os.path.exists(path):
+                self._sudo('cp', '-r', path, self.get_chef_data_root())
+        os.remove(repo)
+        shutil.rmtree(tmp_folder)
+
+
 def get_manager(ctx):
-    managers = ChefClientManager, ChefSoloManager
+    managers = ChefClientManager, ChefSoloManager, ChefZeroManager
     for cls in managers:
         if cls.can_handle(ctx):
             ctx.logger.info(
