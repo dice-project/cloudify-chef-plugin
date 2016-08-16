@@ -54,7 +54,7 @@ tmp_dir = os.environ.get('TMPDIR', '/tmp')
 CHEF_INSTALL_LOCK = (
     os.path.join(tmp_dir, 'cloudify-plugin-chef.install-lock'), 30, 10)  # 5min
 CHEF_CLIENT_LOCK = (
-    os.path.join(tmp_dir, 'cloudify-plugin-chef.client-lock'), 30, 20)  # 10min
+    os.path.join(tmp_dir, 'cloudify-plugin-chef.client-lock'), 60, 30)  # 30min
 
 COMMON_DIRS = {
     'checksum_path': 'checksums',
@@ -309,28 +309,36 @@ class ChefManager(object):
                 "proceeding anyway")
 
     def run(self, runlist, chef_attributes):
+        """
+        Execute Chef command
+        """
         ctx = self.ctx
-        self.install_files()
-        self._prepare_for_run(runlist)
+        with RetryingLock(ctx, *CHEF_CLIENT_LOCK):
+            self.install_files()
+            self._prepare_for_run(runlist)
 
-        t = 'cloudify_chef_attrs_in.{0}.{1}.{2}.'.format(
-            self.get_node(ctx).name, self.get_instance(ctx).id, os.getpid())
-        self.attribute_file = tempfile.NamedTemporaryFile(prefix=t,
-                                                          suffix=".json",
-                                                          delete=False)
-        json.dump(chef_attributes, self.attribute_file)
-        self.attribute_file.close()
+            t = 'cloudify_chef_attrs_in.{0}.{1}.{2}.'.format(
+                self.get_node(ctx).name, self.get_instance(ctx).id, os.getpid()
+            )
+            self.attribute_file = tempfile.NamedTemporaryFile(
+                prefix=t, suffix=".json", delete=False
+            )
+            json.dump(chef_attributes, self.attribute_file)
+            self.attribute_file.close()
 
-        cmd = self._get_cmd(runlist)
+            cmd = self._get_cmd(runlist)
 
-        try:
-            self._sudo(*cmd)
-            os.remove(self.attribute_file.name)
-            # on failure, leave for debugging
-        except SudoError as exc:
-            raise ChefError("The chef run failed\n"
-                            "runlist: {0}\nattributes: {1}\nexception: \n{2}".
-                            format(runlist, chef_attributes, exc))
+            try:
+                self._sudo(*cmd)
+                os.remove(self.attribute_file.name)
+                # on failure, leave for debugging
+            except SudoError as exc:
+                raise ChefError(
+                    "The chef run failed\n"
+                    "runlist: {0}\n"
+                    "attributes: {1}\n"
+                    "exception: \n{2}".format(runlist, chef_attributes, exc)
+                )
 
     def _prepare_for_run(self, runlist):
         pass
