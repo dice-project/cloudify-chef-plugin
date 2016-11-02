@@ -841,7 +841,9 @@ def run_chef(ctx, runlist):
     with open(attrs_tmp_file.name) as f:
         chef_output_attributes = json.load(f)
 
-    del chef_output_attributes['cloudify']['runtime_properties']
+    rt_props = chef_output_attributes['cloudify'].pop('runtime_properties')
+    for k, v in rt_props.items():
+        instance.runtime_properties[k] = v
     instance.runtime_properties['chef_attributes'] = chef_output_attributes
 
     os.remove(attrs_tmp_file.name)
