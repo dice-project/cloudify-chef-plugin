@@ -284,6 +284,13 @@ class ChefManager(object):
             '\n'
             'log_level              :info\n'
         ).format(self.get_chef_data_root())
+
+        # Proxy settings
+        s = s + 'no_proxy "127.0.0.1,localhost"\n'
+        chef_config = self.get_node_properties(self.ctx)['chef_config']
+        for key in ('http_proxy', 'ftp_proxy'):
+            if key in chef_config and chef_config[key] != "":
+                s = s + '{} "{}"\n'.format(key, chef_config[key])
         return s
 
     def uninstall(self):
