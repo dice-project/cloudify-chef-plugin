@@ -730,6 +730,7 @@ def _context_to_struct(ctx, target=False):
             instance = ctx.source.instance
         ret = {
             'node_id': instance.id,
+            'node_name': node.name,
             'runtime_properties': instance.runtime_properties,
             'properties': node.properties,
             'blueprint_id': ctx.blueprint.id,
