@@ -852,6 +852,5 @@ def run_chef(ctx, runlist):
     rt_props = chef_output_attributes['cloudify'].pop('runtime_properties')
     for k, v in rt_props.items():
         instance.runtime_properties[k] = v
-    instance.runtime_properties['chef_attributes'] = chef_output_attributes
 
     os.remove(attrs_tmp_file.name)
