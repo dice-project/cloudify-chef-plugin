@@ -387,29 +387,14 @@ class ChefManager(object):
         cmd = ["/usr/bin/sudo"] + list(args)
         ctx.logger.info("Running: '%s'", ' '.join(cmd))
 
-        # TODO: Should we put the stdout/stderr in the celery logger?
-        #       should we also keep output of successful runs?
-        #       per log level? Also see comment under run_chef()
-        stdout = tempfile.TemporaryFile('rw+b')
-        stderr = tempfile.TemporaryFile('rw+b')
-        out = None
-        err = None
-        try:
-            subprocess.check_call(cmd, stdout=stdout, stderr=stderr)
-            out = get_file_contents(stdout)
-            err = get_file_contents(stderr)
-            self._log_text("Chef stdout", "  [out] ", out)
-            self._log_text("Chef stderr", "  [err] ", err)
-        except subprocess.CalledProcessError as exc:
-            raise SudoError("{exc}\nSTDOUT:\n{stdout}\nSTDERR:{stderr}".format(
-                exc=exc,
-                stdout=get_file_contents(stdout),
-                stderr=get_file_contents(stderr)))
-        finally:
-            stdout.close()
-            stderr.close()
-
-        return out, err
+        proc = subprocess.Popen(cmd, bufsize=1, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT)
+        for line in proc.stdout:
+            ctx.logger.info(line.rstrip())
+        if proc.wait() != 0:
+            raise SudoError(
+                '"{}" returned {}'.format(' '.join(cmd), proc.returncode)
+            )
 
     def _sudo_write_file(self, filename, contents):
         """a helper to create a file with sudo"""
